@@ -6,7 +6,10 @@ from datetime import (
     timedelta,
     tzinfo,
 )
-from typing import overload
+from typing import (
+    Literal,
+    overload,
+)
 
 import numpy as np
 from pandas import (
@@ -56,7 +59,7 @@ class DatetimeIndex(  # type: ignore[misc]
         dtype=...,
         copy: bool = ...,
         name=...,
-    ): ...
+    ) -> None: ...
     def __array__(self, dtype=...) -> np.ndarray: ...
     def __reduce__(self): ...
     # various ignores needed for mypy, as we do want to restrict what can be used in
@@ -104,6 +107,7 @@ def date_range(
     normalize: bool = ...,
     name: Hashable | None = ...,
     inclusive: IntervalClosedType = ...,
+    unit: Literal["s", "ms", "us", "ns"] | None = ...,
 ) -> DatetimeIndex: ...
 @overload
 def bdate_range(

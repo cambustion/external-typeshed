@@ -1,5 +1,6 @@
 from collections.abc import (
     Callable,
+    Generator,
     Hashable,
     Iterable,
     Iterator,
@@ -20,18 +21,22 @@ from typing import (
 from matplotlib.axes import Axes as PlotAxes
 import numpy as np
 from pandas import (
+    Period,
     Timedelta,
     Timestamp,
 )
 from pandas.core.arraylike import OpsMixin
 from pandas.core.generic import NDFrame
-from pandas.core.groupby.generic import (
-    _DataFrameGroupByNonScalar,
-    _DataFrameGroupByScalar,
-)
+from pandas.core.groupby.generic import DataFrameGroupBy
 from pandas.core.groupby.grouper import Grouper
 from pandas.core.indexers import BaseIndexer
 from pandas.core.indexes.base import Index
+from pandas.core.indexes.category import CategoricalIndex
+from pandas.core.indexes.datetimes import DatetimeIndex
+from pandas.core.indexes.interval import IntervalIndex
+from pandas.core.indexes.multi import MultiIndex
+from pandas.core.indexes.period import PeriodIndex
+from pandas.core.indexes.timedeltas import TimedeltaIndex
 from pandas.core.indexing import (
     _iLocIndexer,
     _IndexSliceTuple,
@@ -48,6 +53,7 @@ from pandas.core.window.rolling import (
     Rolling,
     Window,
 )
+from typing_extensions import Self
 import xarray as xr
 
 from pandas._libs.missing import NAType
@@ -70,7 +76,6 @@ from pandas._typing import (
     Dtype,
     FilePath,
     FillnaOptions,
-    FloatFormatType,
     FormattersType,
     GroupByObjectNonScalar,
     HashableT,
@@ -81,7 +86,9 @@ from pandas._typing import (
     IndexingInt,
     IndexLabel,
     IndexType,
+    InterpolateOptions,
     IntervalClosedType,
+    IntervalT,
     JoinHow,
     JsonFrameOrient,
     Label,
@@ -101,6 +108,7 @@ from pandas._typing import (
     ReplaceMethod,
     Scalar,
     ScalarT,
+    SeriesByT,
     SortKind,
     StataDateFormat,
     StorageOptions,
@@ -149,7 +157,7 @@ class _iLocIndexerFrame(_iLocIndexer):
         | tuple[IndexType, int]
         | tuple[IndexType, IndexType]
         | tuple[int, IndexType],
-        value: S1 | Series | DataFrame | np.ndarray | None,
+        value: Scalar | Series | DataFrame | np.ndarray | None,
     ) -> None: ...
 
 class _LocIndexerFrame(_LocIndexer):
@@ -198,13 +206,13 @@ class _LocIndexerFrame(_LocIndexer):
     def __setitem__(
         self,
         idx: MaskType | StrLike | _IndexSliceTuple | list[ScalarT],
-        value: S1 | ArrayLike | Series | DataFrame | None,
+        value: Scalar | ArrayLike | Series | DataFrame | list | None,
     ) -> None: ...
     @overload
     def __setitem__(
         self,
         idx: tuple[_IndexSliceTuple, HashableT],
-        value: S1 | ArrayLike | Series[S1] | list | None,
+        value: Scalar | ArrayLike | Series | list | None,
     ) -> None: ...
 
 class DataFrame(NDFrame, OpsMixin):
@@ -222,7 +230,7 @@ class DataFrame(NDFrame, OpsMixin):
         columns: Axes | None = ...,
         dtype=...,
         copy: _bool = ...,
-    ) -> DataFrame: ...
+    ) -> Self: ...
     @overload
     def __new__(
         cls,
@@ -231,7 +239,7 @@ class DataFrame(NDFrame, OpsMixin):
         columns: Axes,
         dtype=...,
         copy: _bool = ...,
-    ) -> DataFrame: ...
+    ) -> Self: ...
     def __dataframe__(
         self, nan_as_null: bool = ..., allow_copy: bool = ...
     ) -> DataFrameXchg: ...
@@ -593,14 +601,15 @@ Name: population, dtype: int64
     def T(self) -> DataFrame: ...
     def __getattr__(self, name: str) -> Series: ...
     @overload
-    def __getitem__(
+    def __getitem__(  # type: ignore[misc]
         self,
         key: Series[_bool]
         | DataFrame
         | Index
         | np_ndarray_str
         | np_ndarray_bool
-        | list[_ScalarOrTupleT],
+        | list[_ScalarOrTupleT]
+        | Generator[_ScalarOrTupleT, None, None],
     ) -> DataFrame: ...
     @overload
     def __getitem__(self, key: slice) -> DataFrame: ...
@@ -609,7 +618,7 @@ Name: population, dtype: int64
     def isetitem(
         self, loc: int | Sequence[int], value: Scalar | ArrayLike | list[Any]
     ) -> None: ...
-    def __setitem__(self, key, value): ...
+    def __setitem__(self, key, value) -> None: ...
     @overload
     def query(self, expr: _str, *, inplace: Literal[True], **kwargs) -> None: ...
     @overload
@@ -2357,7 +2366,7 @@ d  4
         squeeze: _bool = ...,
         observed: _bool = ...,
         dropna: _bool = ...,
-    ) -> _DataFrameGroupByScalar:
+    ) -> DataFrameGroupBy[Scalar]:
         """
 Group DataFrame using a mapper or by a Series of columns.
 
@@ -2550,7 +2559,7 @@ Parrot 2  Parrot       24.0
     @overload
     def groupby(
         self,
-        by: GroupByObjectNonScalar | None = ...,
+        by: DatetimeIndex,
         axis: Axis = ...,
         level: Level | None = ...,
         as_index: _bool = ...,
@@ -2559,7 +2568,85 @@ Parrot 2  Parrot       24.0
         squeeze: _bool = ...,
         observed: _bool = ...,
         dropna: _bool = ...,
-    ) -> _DataFrameGroupByNonScalar: ...
+    ) -> DataFrameGroupBy[Timestamp]: ...
+    @overload
+    def groupby(
+        self,
+        by: TimedeltaIndex,
+        axis: Axis = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> DataFrameGroupBy[Timedelta]: ...
+    @overload
+    def groupby(
+        self,
+        by: PeriodIndex,
+        axis: Axis = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> DataFrameGroupBy[Period]: ...
+    @overload
+    def groupby(
+        self,
+        by: IntervalIndex[IntervalT],
+        axis: Axis = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> DataFrameGroupBy[IntervalT]: ...
+    @overload
+    def groupby(
+        self,
+        by: MultiIndex | GroupByObjectNonScalar | None = ...,
+        axis: Axis = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> DataFrameGroupBy[tuple]: ...
+    @overload
+    def groupby(
+        self,
+        by: Series[SeriesByT],
+        axis: Axis = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> DataFrameGroupBy[SeriesByT]: ...
+    @overload
+    def groupby(
+        self,
+        by: CategoricalIndex | Index | Series,
+        axis: Axis = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> DataFrameGroupBy[Any]: ...
     def pivot(
         self,
         *,
@@ -3296,7 +3383,7 @@ ValueError: Index contains duplicate entries, cannot reshape
     @overload
     def interpolate(
         self,
-        method: _str = ...,
+        method: InterpolateOptions = ...,
         *,
         axis: Axis = ...,
         limit: int | None = ...,
@@ -3309,20 +3396,20 @@ ValueError: Index contains duplicate entries, cannot reshape
     @overload
     def interpolate(
         self,
-        method: _str = ...,
+        method: InterpolateOptions = ...,
         *,
         axis: Axis = ...,
         limit: int | None = ...,
         limit_direction: Literal["forward", "backward", "both"] = ...,
         limit_area: Literal["inside", "outside"] | None = ...,
         downcast: Literal["infer"] | None = ...,
-        inplace: Literal[False],
+        inplace: Literal[False] = ...,
         **kwargs,
     ) -> DataFrame: ...
     @overload
     def interpolate(
         self,
-        method: _str = ...,
+        method: InterpolateOptions = ...,
         *,
         axis: Axis = ...,
         limit: int | None = ...,
@@ -3563,7 +3650,7 @@ ValueError: Index contains duplicate entries, cannot reshape
     @overload
     def rolling(
         self,
-        window: int | str | BaseOffset | BaseIndexer,
+        window: int | str | _dt.timedelta | BaseOffset | BaseIndexer,
         min_periods: int | None = ...,
         center: _bool = ...,
         on: Hashable | None = ...,
@@ -3577,7 +3664,7 @@ ValueError: Index contains duplicate entries, cannot reshape
     @overload
     def rolling(
         self,
-        window: int | str | BaseOffset | BaseIndexer,
+        window: int | str | _dt.timedelta | BaseOffset | BaseIndexer,
         min_periods: int | None = ...,
         center: _bool = ...,
         on: Hashable | None = ...,
@@ -3690,18 +3777,38 @@ ValueError: Index contains duplicate entries, cannot reshape
     def to_json(
         self,
         path_or_buf: FilePath | WriteBuffer[str],
-        orient: JsonFrameOrient | None = ...,
+        *,
+        orient: Literal["records"],
         date_format: Literal["epoch", "iso"] | None = ...,
         double_precision: int = ...,
         force_ascii: _bool = ...,
         date_unit: Literal["s", "ms", "us", "ns"] = ...,
         default_handler: Callable[[Any], _str | float | _bool | list | dict]
         | None = ...,
-        lines: _bool = ...,
+        lines: Literal[True],
         compression: CompressionOptions = ...,
         index: _bool = ...,
         indent: int | None = ...,
+        mode: Literal["a"],
     ) -> None: ...
+    @overload
+    def to_json(
+        self,
+        path_or_buf: None = ...,
+        *,
+        orient: Literal["records"],
+        date_format: Literal["epoch", "iso"] | None = ...,
+        double_precision: int = ...,
+        force_ascii: _bool = ...,
+        date_unit: Literal["s", "ms", "us", "ns"] = ...,
+        default_handler: Callable[[Any], _str | float | _bool | list | dict]
+        | None = ...,
+        lines: Literal[True],
+        compression: CompressionOptions = ...,
+        index: _bool = ...,
+        indent: int | None = ...,
+        mode: Literal["a"],
+    ) -> _str: ...
     @overload
     def to_json(
         self,
@@ -3717,7 +3824,25 @@ ValueError: Index contains duplicate entries, cannot reshape
         compression: CompressionOptions = ...,
         index: _bool = ...,
         indent: int | None = ...,
+        mode: Literal["w"] = ...,
     ) -> _str: ...
+    @overload
+    def to_json(
+        self,
+        path_or_buf: FilePath | WriteBuffer[str],
+        orient: JsonFrameOrient | None = ...,
+        date_format: Literal["epoch", "iso"] | None = ...,
+        double_precision: int = ...,
+        force_ascii: _bool = ...,
+        date_unit: Literal["s", "ms", "us", "ns"] = ...,
+        default_handler: Callable[[Any], _str | float | _bool | list | dict]
+        | None = ...,
+        lines: _bool = ...,
+        compression: CompressionOptions = ...,
+        index: _bool = ...,
+        indent: int | None = ...,
+        mode: Literal["w"] = ...,
+    ) -> None: ...
     @overload
     def to_string(
         self,
@@ -3728,7 +3853,7 @@ ValueError: Index contains duplicate entries, cannot reshape
         index: _bool = ...,
         na_rep: _str = ...,
         formatters: FormattersType | None = ...,
-        float_format: FloatFormatType | None = ...,
+        float_format: Callable[[float], str] | None = ...,
         sparsify: _bool | None = ...,
         index_names: _bool = ...,
         justify: _str | None = ...,
@@ -3751,7 +3876,7 @@ ValueError: Index contains duplicate entries, cannot reshape
         index: _bool = ...,
         na_rep: _str = ...,
         formatters: FormattersType | None = ...,
-        float_format: FloatFormatType | None = ...,
+        float_format: Callable[[float], str] | None = ...,
         sparsify: _bool | None = ...,
         index_names: _bool = ...,
         justify: _str | None = ...,

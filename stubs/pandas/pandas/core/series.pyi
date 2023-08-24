@@ -20,12 +20,6 @@ from typing import (
     overload,
 )
 
-from core.api import (
-    Int8Dtype as Int8Dtype,
-    Int16Dtype as Int16Dtype,
-    Int32Dtype as Int32Dtype,
-    Int64Dtype as Int64Dtype,
-)
 from matplotlib.axes import (
     Axes as PlotAxes,
     SubplotBase,
@@ -33,16 +27,23 @@ from matplotlib.axes import (
 import numpy as np
 from pandas import (
     Period,
+    PeriodDtype,
     Timedelta,
     Timestamp,
+)
+from pandas.core.api import (
+    Int8Dtype as Int8Dtype,
+    Int16Dtype as Int16Dtype,
+    Int32Dtype as Int32Dtype,
+    Int64Dtype as Int64Dtype,
 )
 from pandas.core.arrays.base import ExtensionArray
 from pandas.core.arrays.categorical import CategoricalAccessor
 from pandas.core.arrays.interval import IntervalArray
-from pandas.core.groupby.generic import (
-    _SeriesGroupByNonScalar,
-    _SeriesGroupByScalar,
-)
+from pandas.core.base import IndexOpsMixin
+from pandas.core.frame import DataFrame
+from pandas.core.generic import NDFrame
+from pandas.core.groupby.generic import SeriesGroupBy
 from pandas.core.indexers import BaseIndexer
 from pandas.core.indexes.accessors import (
     CombinedDatetimelikeProperties,
@@ -51,21 +52,24 @@ from pandas.core.indexes.accessors import (
     TimestampProperties,
 )
 from pandas.core.indexes.base import Index
+from pandas.core.indexes.category import CategoricalIndex
 from pandas.core.indexes.datetimes import DatetimeIndex
 from pandas.core.indexes.interval import IntervalIndex
+from pandas.core.indexes.multi import MultiIndex
 from pandas.core.indexes.period import PeriodIndex
 from pandas.core.indexes.timedeltas import TimedeltaIndex
 from pandas.core.indexing import (
     _AtIndexer,
     _iAtIndexer,
+    _iLocIndexer,
     _IndexSliceTuple,
+    _LocIndexer,
 )
 from pandas.core.resample import Resampler
 from pandas.core.strings import StringMethods
 from pandas.core.window import (
     Expanding,
     ExponentialMovingWindow,
-    Rolling,
 )
 from pandas.core.window.rolling import (
     Rolling,
@@ -73,6 +77,7 @@ from pandas.core.window.rolling import (
 )
 from typing_extensions import (
     Never,
+    Self,
     TypeAlias,
 )
 import xarray as xr
@@ -100,6 +105,7 @@ from pandas._typing import (
     CategoryDtypeArg,
     ComplexDtypeArg,
     CompressionOptions,
+    Dtype,
     DtypeBackend,
     DtypeObj,
     FilePath,
@@ -112,7 +118,9 @@ from pandas._typing import (
     IgnoreRaise,
     IndexingInt,
     IntDtypeArg,
+    InterpolateOptions,
     IntervalClosedType,
+    IntervalT,
     JoinHow,
     JsonSeriesOrient,
     Level,
@@ -120,16 +128,20 @@ from pandas._typing import (
     ListLikeU,
     MaskType,
     NaPosition,
+    ObjectDtypeArg,
     QuantileInterpolation,
     RandomState,
     Renamer,
     ReplaceMethod,
     Scalar,
+    SeriesByT,
     SortKind,
     StrDtypeArg,
     TimedeltaDtypeArg,
     TimestampConvention,
     TimestampDtypeArg,
+    UIntDtypeArg,
+    VoidDtypeArg,
     WriteBuffer,
     np_ndarray_anyint,
     np_ndarray_bool,
@@ -140,15 +152,6 @@ from pandas._typing import (
 from pandas.core.dtypes.base import ExtensionDtype
 
 from pandas.plotting import PlotAccessor
-
-from .base import IndexOpsMixin
-from .frame import DataFrame
-from .generic import NDFrame
-from .indexes.multi import MultiIndex
-from .indexing import (
-    _iLocIndexer,
-    _LocIndexer,
-)
 
 _bool = bool
 _str = str
@@ -179,7 +182,13 @@ class _LocIndexerSeries(_LocIndexer, Generic[S1]):
     @overload
     def __getitem__(
         self,
-        idx: MaskType | Index | Sequence[float] | list[str] | slice | _IndexSliceTuple,
+        idx: MaskType
+        | Index
+        | Sequence[float]
+        | list[str]
+        | slice
+        | _IndexSliceTuple
+        | Callable,
         # _IndexSliceTuple is when having a tuple that includes a slice.  Could just
         # be s.loc[1, :], or s.loc[pd.IndexSlice[1, :]]
     ) -> Series[S1]: ...
@@ -206,92 +215,55 @@ class Series(IndexOpsMixin, NDFrame, Generic[S1]):
     _ListLike: TypeAlias = ArrayLike | dict[_str, np.ndarray] | list | tuple | Index
     __hash__: ClassVar[None]
 
+    # TODO: can __new__ be converted to __init__? Pandas implements __init__
     @overload
     def __new__(
         cls,
         data: DatetimeIndex | Sequence[Timestamp | np.datetime64 | datetime],
         index: Axes | None = ...,
-        dtype=...,
+        dtype: TimestampDtypeArg = ...,
         name: Hashable | None = ...,
         copy: bool = ...,
-        fastpath: bool = ...,
     ) -> TimestampSeries: ...
     @overload
     def __new__(
         cls,
         data: _ListLike,
-        dtype: Literal["datetime64[ns]"],
         index: Axes | None = ...,
+        *,
+        dtype: TimestampDtypeArg,
         name: Hashable | None = ...,
         copy: bool = ...,
-        fastpath: bool = ...,
     ) -> TimestampSeries: ...
     @overload
     def __new__(
         cls,
         data: PeriodIndex,
         index: Axes | None = ...,
-        dtype=...,
+        dtype: PeriodDtype = ...,
         name: Hashable | None = ...,
         copy: bool = ...,
-        fastpath: bool = ...,
     ) -> PeriodSeries: ...
     @overload
     def __new__(
         cls,
         data: TimedeltaIndex | Sequence[Timedelta | np.timedelta64 | timedelta],
         index: Axes | None = ...,
-        dtype=...,
+        dtype: TimedeltaDtypeArg = ...,
         name: Hashable | None = ...,
         copy: bool = ...,
-        fastpath: bool = ...,
     ) -> TimedeltaSeries: ...
     @overload
     def __new__(
         cls,
-        data: IntervalIndex[Interval[int]] | Interval[int] | Sequence[Interval[int]],
+        data: IntervalIndex[Interval[_OrderableT]]
+        | Interval[_OrderableT]
+        | Sequence[Interval[_OrderableT]],
         index: Axes | None = ...,
-        dtype=...,
+        dtype: Literal["Interval"] = ...,
         name: Hashable | None = ...,
         copy: bool = ...,
-        fastpath: bool = ...,
-    ) -> IntervalSeries[int]: ...
-    @overload
-    def __new__(
-        cls,
-        data: IntervalIndex[Interval[float]]
-        | Interval[float]
-        | Sequence[Interval[float]],
-        index: Axes | None = ...,
-        dtype=...,
-        name: Hashable | None = ...,
-        copy: bool = ...,
-        fastpath: bool = ...,
-    ) -> IntervalSeries[float]: ...
-    @overload
-    def __new__(
-        cls,
-        data: IntervalIndex[Interval[Timestamp]]
-        | Interval[Timestamp]
-        | Sequence[Interval[Timestamp]],
-        index: Axes | None = ...,
-        dtype=...,
-        name: Hashable | None = ...,
-        copy: bool = ...,
-        fastpath: bool = ...,
-    ) -> IntervalSeries[Timestamp]: ...
-    @overload
-    def __new__(
-        cls,
-        data: IntervalIndex[Interval[Timedelta]]
-        | Interval[Timedelta]
-        | Sequence[Interval[Timedelta]],
-        index: Axes | None = ...,
-        dtype=...,
-        name: Hashable | None = ...,
-        copy: bool = ...,
-        fastpath: bool = ...,
-    ) -> IntervalSeries[Timedelta]: ...
+    ) -> IntervalSeries[_OrderableT]: ...
     @overload
     def __new__(
         cls,
@@ -300,22 +272,24 @@ class Series(IndexOpsMixin, NDFrame, Generic[S1]):
         index: Axes | None = ...,
         name: Hashable | None = ...,
         copy: bool = ...,
-        fastpath: bool = ...,
-    ) -> Series[S1]: ...
+    ) -> Self: ...
     @overload
     def __new__(
         cls,
-        data: object
-        | _ListLike
-        | Series[S1]
-        | dict[int, S1]
-        | dict[_str, S1]
-        | None = ...,
+        data: Series[S1] | dict[int, S1] | dict[_str, S1] = ...,
         index: Axes | None = ...,
-        dtype=...,
+        dtype: Dtype = ...,
         name: Hashable | None = ...,
         copy: bool = ...,
-        fastpath: bool = ...,
+    ) -> Self: ...
+    @overload
+    def __new__(
+        cls,
+        data: object | _ListLike | None = ...,
+        index: Axes | None = ...,
+        dtype: Dtype = ...,
+        name: Hashable | None = ...,
+        copy: bool = ...,
     ) -> Series: ...
     @property
     def hasnans(self) -> bool: ...
@@ -433,7 +407,7 @@ starting from the end of the object, just like with Python lists.
 3    lion  mammal       80.5
         """
         pass
-    def __getattr__(self, name: str) -> S1: ...
+    def __getattr__(self, name: _str) -> S1: ...
     @overload
     def __getitem__(
         self,
@@ -520,38 +494,64 @@ starting from the end of the object, just like with Python lists.
         self,
         buf: FilePath | WriteBuffer[str],
         na_rep: _str = ...,
-        formatters=...,
-        float_format=...,
-        sparsify: _bool | None = ...,
-        index_names: _bool = ...,
-        justify: _str | None = ...,
+        float_format: Callable[[float], str] = ...,
+        header: _bool = ...,
+        index: _bool = ...,
+        length: _bool = ...,
+        dtype: _bool = ...,
+        name: _bool = ...,
         max_rows: int | None = ...,
         min_rows: int | None = ...,
-        max_cols: int | None = ...,
-        show_dimensions: _bool = ...,
-        decimal: _str = ...,
-        line_width: int | None = ...,
-        max_colwidth: int | None = ...,
-        encoding: _str | None = ...,
     ) -> None: ...
     @overload
     def to_string(
         self,
         buf: None = ...,
         na_rep: _str = ...,
-        formatters=...,
-        float_format=...,
-        sparsify: _bool | None = ...,
-        index_names: _bool = ...,
-        justify: _str | None = ...,
+        float_format: Callable[[float], str] = ...,
+        header: _bool = ...,
+        index: _bool = ...,
+        length: _bool = ...,
+        dtype: _bool = ...,
+        name: _bool = ...,
         max_rows: int | None = ...,
         min_rows: int | None = ...,
-        max_cols: int | None = ...,
-        show_dimensions: _bool = ...,
-        decimal: _str = ...,
-        line_width: int | None = ...,
-        max_colwidth: int | None = ...,
-        encoding: _str | None = ...,
+    ) -> _str: ...
+    @overload
+    def to_json(
+        self,
+        path_or_buf: FilePath | WriteBuffer[str],
+        *,
+        orient: Literal["records"],
+        date_format: Literal["epoch", "iso"] | None = ...,
+        double_precision: int = ...,
+        force_ascii: _bool = ...,
+        date_unit: Literal["s", "ms", "us", "ns"] = ...,
+        default_handler: Callable[[Any], _str | float | _bool | list | dict]
+        | None = ...,
+        lines: Literal[True],
+        compression: CompressionOptions = ...,
+        index: _bool = ...,
+        indent: int | None = ...,
+        mode: Literal["a"],
+    ) -> None: ...
+    @overload
+    def to_json(
+        self,
+        path_or_buf: None = ...,
+        *,
+        orient: Literal["records"],
+        date_format: Literal["epoch", "iso"] | None = ...,
+        double_precision: int = ...,
+        force_ascii: _bool = ...,
+        date_unit: Literal["s", "ms", "us", "ns"] = ...,
+        default_handler: Callable[[Any], _str | float | _bool | list | dict]
+        | None = ...,
+        lines: Literal[True],
+        compression: CompressionOptions = ...,
+        index: _bool = ...,
+        indent: int | None = ...,
+        mode: Literal["a"],
     ) -> _str: ...
     @overload
     def to_json(
@@ -568,6 +568,7 @@ starting from the end of the object, just like with Python lists.
         compression: CompressionOptions = ...,
         index: _bool = ...,
         indent: int | None = ...,
+        mode: Literal["w"] = ...,
     ) -> None: ...
     @overload
     def to_json(
@@ -584,6 +585,7 @@ starting from the end of the object, just like with Python lists.
         compression: CompressionOptions = ...,
         index: _bool = ...,
         indent: int | None = ...,
+        mode: Literal["w"] = ...,
     ) -> _str: ...
     def to_xarray(self) -> xr.DataArray: ...
     def items(self) -> Iterable[tuple[Hashable, S1]]: ...
@@ -605,7 +607,7 @@ starting from the end of the object, just like with Python lists.
         squeeze: _bool = ...,
         observed: _bool = ...,
         dropna: _bool = ...,
-    ) -> _SeriesGroupByScalar[S1]:
+    ) -> SeriesGroupBy[S1, Scalar]:
         """
 Group Series using a mapper or by a Series of columns.
 
@@ -776,7 +778,7 @@ Name: Max Speed, dtype: float64
     @overload
     def groupby(
         self,
-        by: GroupByObjectNonScalar = ...,
+        by: DatetimeIndex,
         axis: AxisIndex = ...,
         level: Level | None = ...,
         as_index: _bool = ...,
@@ -785,7 +787,85 @@ Name: Max Speed, dtype: float64
         squeeze: _bool = ...,
         observed: _bool = ...,
         dropna: _bool = ...,
-    ) -> _SeriesGroupByNonScalar[S1]: ...
+    ) -> SeriesGroupBy[S1, Timestamp]: ...
+    @overload
+    def groupby(
+        self,
+        by: TimedeltaIndex,
+        axis: AxisIndex = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> SeriesGroupBy[S1, Timedelta]: ...
+    @overload
+    def groupby(
+        self,
+        by: PeriodIndex,
+        axis: AxisIndex = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> SeriesGroupBy[S1, Period]: ...
+    @overload
+    def groupby(
+        self,
+        by: IntervalIndex[IntervalT],
+        axis: AxisIndex = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> SeriesGroupBy[S1, IntervalT]: ...
+    @overload
+    def groupby(
+        self,
+        by: MultiIndex | GroupByObjectNonScalar = ...,
+        axis: AxisIndex = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> SeriesGroupBy[S1, tuple]: ...
+    @overload
+    def groupby(
+        self,
+        by: Series[SeriesByT],
+        axis: AxisIndex = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> SeriesGroupBy[S1, SeriesByT]: ...
+    @overload
+    def groupby(
+        self,
+        by: CategoricalIndex | Index | Series,
+        axis: AxisIndex = ...,
+        level: Level | None = ...,
+        as_index: _bool = ...,
+        sort: _bool = ...,
+        group_keys: _bool = ...,
+        squeeze: _bool = ...,
+        observed: _bool = ...,
+        dropna: _bool = ...,
+    ) -> SeriesGroupBy[S1, Any]: ...
     # need the ignore because None is Hashable
     @overload
     def count(self, level: None = ...) -> int: ...  # type: ignore[misc]
@@ -1308,7 +1388,7 @@ Name: Data, dtype: int64
     @overload
     def apply(
         self,
-        func: Callable[..., Scalar | Sequence | set | Mapping],
+        func: Callable[..., Scalar | Sequence | set | Mapping | NAType | None],
         convertDType: _bool = ...,
         args: tuple = ...,
         **kwds,
@@ -2664,7 +2744,7 @@ See the :ref:`user guide <basics.reindexing>` for more.
     @overload
     def astype(
         self,
-        dtype: IntDtypeArg,
+        dtype: IntDtypeArg | UIntDtypeArg,
         copy: _bool = ...,
         errors: IgnoreRaise = ...,
     ) -> Series[int]: ...
@@ -2720,7 +2800,7 @@ See the :ref:`user guide <basics.reindexing>` for more.
     @overload
     def astype(
         self,
-        dtype: type[object] | ExtensionDtype,
+        dtype: ObjectDtypeArg | VoidDtypeArg | ExtensionDtype | DtypeObj,
         copy: _bool = ...,
         errors: IgnoreRaise = ...,
     ) -> Series: ...
@@ -2782,27 +2862,7 @@ See the :ref:`user guide <basics.reindexing>` for more.
     ) -> Series[S1] | None: ...
     def interpolate(
         self,
-        method: _str
-        | Literal[
-            "linear",
-            "time",
-            "index",
-            "values",
-            "pad",
-            "nearest",
-            "slinear",
-            "quadratic",
-            "cubic",
-            "spline",
-            "barycentric",
-            "polynomial",
-            "krogh",
-            "pecewise_polynomial",
-            "spline",
-            "pchip",
-            "akima",
-            "from_derivatives",
-        ] = ...,
+        method: InterpolateOptions = ...,
         *,
         axis: AxisIndex | None = ...,
         limit: int | None = ...,
@@ -2890,7 +2950,7 @@ See the :ref:`user guide <basics.reindexing>` for more.
     def mask(
         self,
         cond: MaskType,
-        other: Scalar | Series[S1] | DataFrame | Callable = ...,
+        other: Scalar | Series[S1] | DataFrame | Callable | NAType | None = ...,
         *,
         inplace: _bool = ...,
         axis: AxisIndex | None = ...,
@@ -3041,6 +3101,16 @@ See the :ref:`user guide <basics.reindexing>` for more.
     ) -> Series[bool]: ...
     @overload
     def __rxor__(self, other: int | np_ndarray_anyint | Series[int]) -> Series[int]: ...  # type: ignore[misc]
+    @overload
+    def __sub__(
+        self: Series[Timestamp],
+        other: Timedelta | TimedeltaSeries | TimedeltaIndex | np.timedelta64,
+    ) -> TimestampSeries: ...
+    @overload
+    def __sub__(
+        self: Series[Timedelta],
+        other: Timedelta | TimedeltaSeries | TimedeltaIndex | np.timedelta64,
+    ) -> TimedeltaSeries: ...
     @overload
     def __sub__(
         self, other: Timestamp | datetime | TimestampSeries
@@ -3318,7 +3388,7 @@ See the :ref:`user guide <basics.reindexing>` for more.
     @overload
     def rolling(
         self,
-        window: int | _str | BaseOffset | BaseIndexer,
+        window: int | _str | timedelta | BaseOffset | BaseIndexer,
         min_periods: int | None = ...,
         center: _bool = ...,
         on: _str | None = ...,
@@ -3332,7 +3402,7 @@ See the :ref:`user guide <basics.reindexing>` for more.
     @overload
     def rolling(
         self,
-        window: int | _str | BaseOffset | BaseIndexer,
+        window: int | _str | timedelta | BaseOffset | BaseIndexer,
         min_periods: int | None = ...,
         center: _bool = ...,
         on: _str | None = ...,
@@ -3407,7 +3477,7 @@ See the :ref:`user guide <basics.reindexing>` for more.
     # ignore needed because of mypy, for using `Never` as type-var.
     @overload
     def sum(
-        self: Series[Never],  # type: ignore[type-var]
+        self: Series[Never],
         axis: AxisIndex | None = ...,
         skipna: _bool | None = ...,
         level: None = ...,
@@ -3492,8 +3562,8 @@ class TimestampSeries(Series[Timestamp]):
     # ignore needed because of mypy
     @property
     def dt(self) -> TimestampProperties: ...  # type: ignore[override]
-    def __add__(self, other: TimedeltaSeries | np.timedelta64) -> TimestampSeries: ...  # type: ignore[override]
-    def __radd__(self, other: TimedeltaSeries | np.timedelta64) -> TimestampSeries: ...  # type: ignore[override]
+    def __add__(self, other: TimedeltaSeries | np.timedelta64 | timedelta) -> TimestampSeries: ...  # type: ignore[override]
+    def __radd__(self, other: TimedeltaSeries | np.timedelta64 | timedelta) -> TimestampSeries: ...  # type: ignore[override]
     @overload  # type: ignore[override]
     def __sub__(
         self, other: Timestamp | datetime | TimestampSeries
@@ -3501,7 +3571,7 @@ class TimestampSeries(Series[Timestamp]):
     @overload
     def __sub__(
         self,
-        other: Timedelta | TimedeltaSeries | TimedeltaIndex | np.timedelta64,
+        other: timedelta | TimedeltaSeries | TimedeltaIndex | np.timedelta64,
     ) -> TimestampSeries: ...
     def __mul__(self, other: float | Series[int] | Series[float] | Sequence[float]) -> TimestampSeries: ...  # type: ignore[override]
     def __truediv__(self, other: float | Series[int] | Series[float] | Sequence[float]) -> TimestampSeries: ...  # type: ignore[override]

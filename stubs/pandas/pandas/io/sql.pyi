@@ -2,6 +2,7 @@ from collections.abc import (
     Callable,
     Generator,
     Iterable,
+    Mapping,
 )
 import sqlite3
 from typing import (
@@ -13,6 +14,7 @@ from typing import (
 from pandas.core.base import PandasObject
 from pandas.core.frame import DataFrame
 import sqlalchemy.engine
+from sqlalchemy.orm import FromStatement
 import sqlalchemy.sql.expression
 from typing_extensions import TypeAlias
 
@@ -20,13 +22,18 @@ from pandas._libs.lib import NoDefault
 from pandas._typing import (
     DtypeArg,
     DtypeBackend,
+    Scalar,
     npt,
 )
 
 _SQLConnection: TypeAlias = str | sqlalchemy.engine.Connectable | sqlite3.Connection
 
 _SQLStatement: TypeAlias = (
-    str | sqlalchemy.sql.expression.Selectable | sqlalchemy.sql.expression.TextClause
+    str
+    | sqlalchemy.sql.expression.Selectable
+    | sqlalchemy.sql.expression.TextClause
+    | sqlalchemy.sql.Select
+    | FromStatement
 )
 
 @overload
@@ -60,7 +67,7 @@ def read_sql_query(
     con: _SQLConnection,
     index_col: str | list[str] | None = ...,
     coerce_float: bool = ...,
-    params: list[str] | tuple[str, ...] | dict[str, str] | None = ...,
+    params: list[Scalar] | tuple[Scalar, ...] | Mapping[str, Scalar] | None = ...,
     parse_dates: list[str] | dict[str, str] | dict[str, dict[str, Any]] | None = ...,
     *,
     chunksize: int,
@@ -73,7 +80,7 @@ def read_sql_query(
     con: _SQLConnection,
     index_col: str | list[str] | None = ...,
     coerce_float: bool = ...,
-    params: list[str] | tuple[str, ...] | dict[str, str] | None = ...,
+    params: list[Scalar] | tuple[Scalar, ...] | Mapping[str, Scalar] | None = ...,
     parse_dates: list[str] | dict[str, str] | dict[str, dict[str, Any]] | None = ...,
     chunksize: None = ...,
     dtype: DtypeArg | None = ...,
@@ -85,7 +92,7 @@ def read_sql(
     con: _SQLConnection,
     index_col: str | list[str] | None = ...,
     coerce_float: bool = ...,
-    params: list[str] | tuple[str, ...] | dict[str, str] | None = ...,
+    params: list[Scalar] | tuple[Scalar, ...] | Mapping[str, Scalar] | None = ...,
     parse_dates: list[str] | dict[str, str] | dict[str, dict[str, Any]] | None = ...,
     columns: list[str] = ...,
     *,
@@ -99,7 +106,7 @@ def read_sql(
     con: _SQLConnection,
     index_col: str | list[str] | None = ...,
     coerce_float: bool = ...,
-    params: list[str] | tuple[str, ...] | dict[str, str] | None = ...,
+    params: list[Scalar] | tuple[Scalar, ...] | Mapping[str, Scalar] | None = ...,
     parse_dates: list[str] | dict[str, str] | dict[str, dict[str, Any]] | None = ...,
     columns: list[str] = ...,
     chunksize: None = ...,
