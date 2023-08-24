@@ -27,9 +27,9 @@ from pandas._typing import (
 
 VALID_CLOSED: frozenset[str]
 
-_OrderableScalarT = TypeVar("_OrderableScalarT", int, float)
-_OrderableTimesT = TypeVar("_OrderableTimesT", Timestamp, Timedelta)
-_OrderableT = TypeVar("_OrderableT", int, float, Timestamp, Timedelta)
+_OrderableScalarT = TypeVar("_OrderableScalarT", bound=int | float)
+_OrderableTimesT = TypeVar("_OrderableTimesT", bound=Timestamp | Timedelta)
+_OrderableT = TypeVar("_OrderableT", bound=int | float | Timestamp | Timedelta)
 
 class _LengthDescriptor:
     @overload
@@ -79,7 +79,7 @@ class Interval(IntervalMixin, Generic[_OrderableT]):
         left: _OrderableT,
         right: _OrderableT,
         closed: IntervalClosedType = ...,
-    ): ...
+    ) -> None: ...
     def __hash__(self) -> int: ...
     # for __contains__, it seems that we have to separate out the 4 cases to make
     # mypy happy
@@ -222,7 +222,7 @@ class IntervalTree(IntervalMixin):
         right: np.ndarray,
         closed: IntervalClosedType = ...,
         leaf_size: int = ...,
-    ): ...
+    ) -> None: ...
     def get_indexer(self, target) -> npt.NDArray[np.intp]: ...
     def get_indexer_non_unique(
         self, target
