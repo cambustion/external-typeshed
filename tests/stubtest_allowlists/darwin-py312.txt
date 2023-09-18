@@ -8,7 +8,6 @@ os.PRIO_DARWIN_BG
 os.PRIO_DARWIN_NONUI
 os.PRIO_DARWIN_PROCESS
 os.PRIO_DARWIN_THREAD
-posix.DirEntry.is_junction
 posix.PRIO_DARWIN_BG
 posix.PRIO_DARWIN_NONUI
 posix.PRIO_DARWIN_PROCESS
@@ -28,3 +27,6 @@ xxlimited.Xxo.x_exports
 (locale.dgettext)?
 (locale.gettext)?
 (locale.textdomain)?
+
+# should be removable once 3.12.0rc2 is released:
+posix.lseek
