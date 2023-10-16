@@ -7662,6 +7662,8 @@ class QStyleOptionViewItem(PySide6.QtWidgets.QStyleOption):
     @staticmethod
     def __copy__() -> None: ...
 
+    @property
+    def rect(self) -> PySide6.QtCore.QRect: ...
 
 class QStylePainter(PySide6.QtGui.QPainter):
 
