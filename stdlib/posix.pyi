@@ -14,7 +14,6 @@ if sys.platform != "win32":
         EX_NOHOST as EX_NOHOST,
         EX_NOINPUT as EX_NOINPUT,
         EX_NOPERM as EX_NOPERM,
-        EX_NOTFOUND as EX_NOTFOUND,
         EX_NOUSER as EX_NOUSER,
         EX_OK as EX_OK,
         EX_OSERR as EX_OSERR,
@@ -29,6 +28,7 @@ if sys.platform != "win32":
         F_TEST as F_TEST,
         F_TLOCK as F_TLOCK,
         F_ULOCK as F_ULOCK,
+        NGROUPS_MAX as NGROUPS_MAX,
         O_APPEND as O_APPEND,
         O_ASYNC as O_ASYNC,
         O_CREAT as O_CREAT,
@@ -222,6 +222,9 @@ if sys.platform != "win32":
         writev as writev,
     )
 
+    if sys.platform != "darwin":
+        from os import EX_NOTFOUND as EX_NOTFOUND
+
     if sys.platform == "linux":
         from os import (
             GRND_NONBLOCK as GRND_NONBLOCK,
@@ -344,6 +347,7 @@ if sys.platform != "win32":
             CLONE_SYSVSEM as CLONE_SYSVSEM,
             CLONE_THREAD as CLONE_THREAD,
             CLONE_VM as CLONE_VM,
+            setns as setns,
             unshare as unshare,
         )
 

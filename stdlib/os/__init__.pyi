@@ -70,9 +70,20 @@ if sys.platform != "win32":
         POSIX_FADV_WILLNEED: int
         POSIX_FADV_DONTNEED: int
 
-    SF_NODISKIO: int
-    SF_MNOWAIT: int
-    SF_SYNC: int
+    if sys.platform != "linux" and sys.platform != "darwin":
+        # In the os-module docs, these are marked as being available
+        # on "Unix, not Emscripten, not WASI."
+        # However, in the source code, a comment indicates they're "FreeBSD constants".
+        # sys.platform could have one of many values on a FreeBSD Python build,
+        # so the sys-module docs recommend doing `if sys.platform.startswith('freebsd')`
+        # to detect FreeBSD builds. Unfortunately that would be too dynamic
+        # for type checkers, however.
+        SF_NODISKIO: int
+        SF_MNOWAIT: int
+        SF_SYNC: int
+
+        if sys.version_info >= (3, 11):
+            SF_NOCACHE: int
 
     if sys.platform == "linux":
         XATTR_SIZE_MAX: int
@@ -282,6 +293,8 @@ if sys.platform != "win32":
     EX_PROTOCOL: int
     EX_NOPERM: int
     EX_CONFIG: int
+
+if sys.platform != "win32" and sys.platform != "darwin":
     EX_NOTFOUND: int
 
 P_NOWAIT: int
@@ -498,8 +511,8 @@ if sys.platform != "win32":
     def setpgid(__pid: int, __pgrp: int) -> None: ...
     def setregid(__rgid: int, __egid: int) -> None: ...
     if sys.platform != "darwin":
-        def setresgid(rgid: int, egid: int, sgid: int) -> None: ...
-        def setresuid(ruid: int, euid: int, suid: int) -> None: ...
+        def setresgid(__rgid: int, __egid: int, __sgid: int) -> None: ...
+        def setresuid(__ruid: int, __euid: int, __suid: int) -> None: ...
 
     def setreuid(__ruid: int, __euid: int) -> None: ...
     def getsid(__pid: int) -> int: ...
@@ -657,18 +670,20 @@ if sys.platform != "win32":
         RWF_SYNC: int
         RWF_HIPRI: int
         RWF_NOWAIT: int
-    @overload
-    def sendfile(out_fd: int, in_fd: int, offset: int | None, count: int) -> int: ...
-    @overload
-    def sendfile(
-        out_fd: int,
-        in_fd: int,
-        offset: int,
-        count: int,
-        headers: Sequence[ReadableBuffer] = ...,
-        trailers: Sequence[ReadableBuffer] = ...,
-        flags: int = 0,
-    ) -> int: ...  # FreeBSD and Mac OS X only
+
+    if sys.platform == "linux":
+        def sendfile(out_fd: FileDescriptor, in_fd: FileDescriptor, offset: int | None, count: int) -> int: ...
+    else:
+        def sendfile(
+            out_fd: FileDescriptor,
+            in_fd: FileDescriptor,
+            offset: int,
+            count: int,
+            headers: Sequence[ReadableBuffer] = ...,
+            trailers: Sequence[ReadableBuffer] = ...,
+            flags: int = 0,
+        ) -> int: ...  # FreeBSD and Mac OS X only
+
     def readv(__fd: int, __buffers: SupportsLenAndGetItem[WriteableBuffer]) -> int: ...
     def writev(__fd: int, __buffers: SupportsLenAndGetItem[ReadableBuffer]) -> int: ...
 
@@ -1099,3 +1114,4 @@ if sys.version_info >= (3, 12) and sys.platform == "linux":
     CLONE_THREAD: int
     CLONE_VM: int
     def unshare(flags: int) -> None: ...
+    def setns(fd: FileDescriptorLike, nstype: int = 0) -> None: ...
