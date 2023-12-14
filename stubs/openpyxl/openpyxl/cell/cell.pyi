@@ -32,18 +32,19 @@ TYPE_FORMULA_CACHE_STRING: Final = "str"
 
 VALID_TYPES: Final[tuple[str, ...]]
 
-def get_type(t: type, value: object) -> Literal["n", "s", "d", "f", None]: ...
+def get_type(t: type, value: object) -> Literal["n", "s", "d", "f"] | None: ...
 def get_time_format(t: _TimeTypes) -> str: ...
 
 class Cell(StyleableObject):
     row: int
     column: int
     data_type: str
+    # row and column are never meant to be None and would lead to errors
     def __init__(
         self,
         worksheet: Worksheet,
-        row: int | None = None,
-        column: int | None = None,
+        row: int,
+        column: int,
         value: str | float | datetime | None = None,
         style_array: StyleArray | None = None,
     ) -> None: ...
