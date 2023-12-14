@@ -7665,6 +7665,9 @@ class QStyleOptionViewItem(PySide6.QtWidgets.QStyleOption):
     @property
     def rect(self) -> PySide6.QtCore.QRect: ...
 
+    @property
+    def palette(self) -> PySide6.QtGui.QPalette: ...
+
 class QStylePainter(PySide6.QtGui.QPainter):
 
     @overload
