@@ -1,0 +1,10 @@
+# Doesn't exist on macos:
+spwd
+_msi
+msilib(.[a-z]+)?
+ossaudiodev
+
+# Not present on all MacOS versions
+fcntl.F_OFD_GETLK
+fcntl.F_OFD_SETLK
+fcntl.F_OFD_SETLKW
