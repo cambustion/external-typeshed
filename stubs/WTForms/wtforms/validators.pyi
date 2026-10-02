@@ -42,7 +42,7 @@ __all__ = (
     "Disabled",
 )
 
-_ValuesT = TypeVar("_ValuesT", bound=Collection[Any], contravariant=True)
+_ValuesT_contra = TypeVar("_ValuesT_contra", bound=Collection[Any], contravariant=True)
 
 class ValidationError(ValueError):
     def __init__(self, message: str = "", *args: object) -> None: ...
@@ -147,12 +147,18 @@ class AnyOf:
     values: Collection[Any]
     message: str | None
     values_formatter: Callable[[Any], str]
+
     @overload
     def __init__(self, values: Collection[Any], message: str | None = None, values_formatter: None = None) -> None: ...
     @overload
-    def __init__(self, values: _ValuesT, message: str | None, values_formatter: Callable[[_ValuesT], str]) -> None: ...
+    def __init__(
+        self, values: _ValuesT_contra, message: str | None, values_formatter: Callable[[_ValuesT_contra], str]
+    ) -> None: ...
     @overload
-    def __init__(self, values: _ValuesT, message: str | None = None, *, values_formatter: Callable[[_ValuesT], str]) -> None: ...
+    def __init__(
+        self, values: _ValuesT_contra, message: str | None = None, *, values_formatter: Callable[[_ValuesT_contra], str]
+    ) -> None: ...
+
     def __call__(self, form: BaseForm, field: Field) -> None: ...
     @staticmethod
     def default_values_formatter(values: Iterable[object]) -> str: ...
@@ -161,12 +167,18 @@ class NoneOf:
     values: Collection[Any]
     message: str | None
     values_formatter: Callable[[Any], str]
+
     @overload
     def __init__(self, values: Collection[Any], message: str | None = None, values_formatter: None = None) -> None: ...
     @overload
-    def __init__(self, values: _ValuesT, message: str | None, values_formatter: Callable[[_ValuesT], str]) -> None: ...
+    def __init__(
+        self, values: _ValuesT_contra, message: str | None, values_formatter: Callable[[_ValuesT_contra], str]
+    ) -> None: ...
     @overload
-    def __init__(self, values: _ValuesT, message: str | None = None, *, values_formatter: Callable[[_ValuesT], str]) -> None: ...
+    def __init__(
+        self, values: _ValuesT_contra, message: str | None = None, *, values_formatter: Callable[[_ValuesT_contra], str]
+    ) -> None: ...
+
     def __call__(self, form: BaseForm, field: Field) -> None: ...
     @staticmethod
     def default_values_formatter(v: Iterable[object]) -> str: ...

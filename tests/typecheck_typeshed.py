@@ -7,14 +7,14 @@ import argparse
 import subprocess
 import sys
 from itertools import product
-from typing_extensions import TypeAlias
+from typing import TypeAlias
 
 from ts_utils.utils import colored, print_error
 
 ReturnCode: TypeAlias = int
 
 SUPPORTED_PLATFORMS = ("linux", "darwin", "win32")
-SUPPORTED_VERSIONS = ("3.13", "3.12", "3.11", "3.10", "3.9")
+SUPPORTED_VERSIONS = ("3.15", "3.14", "3.13", "3.12", "3.11", "3.10")
 LOWEST_SUPPORTED_VERSION = min(SUPPORTED_VERSIONS, key=lambda x: int(x.split(".")[1]))
 DIRECTORIES_TO_TEST = ("scripts", "tests")
 EMPTY: list[str] = []
@@ -60,9 +60,8 @@ def run_mypy_as_subprocess(directory: str, platform: str, version: str) -> Retur
         "--no-error-summary",
         "--enable-error-code",
         "ignore-without-code",
-        # https://github.com/python/mypy/issues/14309
-        # "--enable-error-code",
-        # "possibly-undefined",
+        "--enable-error-code",
+        "possibly-undefined",
         "--enable-error-code",
         "redundant-expr",
         "--enable-error-code",
@@ -70,7 +69,7 @@ def run_mypy_as_subprocess(directory: str, platform: str, version: str) -> Retur
         "--custom-typeshed-dir",
         ".",
     ]
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.stderr:
         print_error(result.stderr)
     if result.stdout:

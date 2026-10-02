@@ -2,26 +2,30 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Iterable
 from http.client import HTTPResponse
-from typing import TYPE_CHECKING, Iterable
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.request import urlopen
 from zipfile import ZipFile
 
-from mypy_protobuf.main import (  # type: ignore[import-untyped]  # pyright: ignore[reportMissingTypeStubs]
-    __version__ as mypy_protobuf__version__,
-)
+try:
+    _mypy_protobuf_version = version("mypy-protobuf")
+except PackageNotFoundError:
+    _mypy_protobuf_version = "unavailable"
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath, StrPath
 
-MYPY_PROTOBUF_VERSION = mypy_protobuf__version__
+MYPY_PROTOBUF_VERSION = _mypy_protobuf_version
 
 
-def download_file(url: str, destination: StrPath) -> None:
+def download_file(url: str, destination: Path) -> None:
     print(f"Downloading '{url}' to '{destination}'")
     resp: HTTPResponse
-    with urlopen(url) as resp, open(destination, "wb") as file:
-        file.write(resp.read())
+    with urlopen(url) as resp:
+        destination.write_bytes(resp.read())
 
 
 def extract_archive(archive_path: StrPath, destination: StrPath) -> None:
@@ -33,9 +37,11 @@ def extract_archive(archive_path: StrPath, destination: StrPath) -> None:
 def run_protoc(
     proto_paths: Iterable[StrPath], mypy_out: StrPath, proto_globs: Iterable[str], cwd: StrOrBytesPath | None = None
 ) -> str:
-    """TODO: Describe parameters and return"""
+    """TODO: Describe parameters and return."""
     protoc_version = (
-        subprocess.run([sys.executable, "-m", "grpc_tools.protoc", "--version"], capture_output=True).stdout.decode().strip()
+        subprocess.run([sys.executable, "-m", "grpc_tools.protoc", "--version"], capture_output=True, check=False)
+        .stdout.decode()
+        .strip()
     )
     print()
     print(protoc_version)

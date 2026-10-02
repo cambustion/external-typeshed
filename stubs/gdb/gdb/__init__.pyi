@@ -4,16 +4,15 @@
 
 import _typeshed
 import threading
-from _typeshed import Incomplete
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager
-from typing import Any, Final, Generic, Literal, Protocol, TypeVar, final, overload
-from typing_extensions import TypeAlias, deprecated
+from typing import Any, Final, Generic, Literal, Protocol, TypeAlias, TypedDict, TypeVar, final, overload, type_check_only
+from typing_extensions import deprecated, disjoint_base
 
 import gdb.FrameDecorator
 import gdb.types
-import gdb.unwinder
-import gdb.xmethod
+from gdb.missing_debug import MissingDebugHandler
+from gdb.missing_files import MissingFileHandler
 
 # The following submodules are automatically imported
 from . import events as events, printing as printing, prompt as prompt, types as types
@@ -38,6 +37,7 @@ def execute(command: str, *, to_string: Literal[True]) -> str: ...
 def execute(command: str, from_tty: bool, to_string: Literal[True]) -> str: ...
 @overload
 def execute(command: str, from_tty: bool = False, to_string: bool = False) -> str | None: ...
+
 def breakpoints() -> Sequence[Breakpoint]: ...
 def rbreak(regex: str, minsyms: bool = ..., throttle: int = ..., symtabs: Iterator[Symtab] = ...) -> list[Breakpoint]: ...
 def parameter(parameter: str, /) -> bool | int | str | None: ...
@@ -48,7 +48,8 @@ def add_history(value: Value, /) -> int: ...
 def history_count() -> int: ...
 def convenience_variable(name: str, /) -> Value | None: ...
 def set_convenience_variable(name: str, value: _ValueOrNative | None, /) -> None: ...
-def parse_and_eval(expression: str, global_context: bool = False, /) -> Value: ...
+def parse_and_eval(expression: str, global_context: bool = False) -> Value: ...
+def format_address(address: int, progspace: Progspace = ..., architecture: Architecture = ...): ...
 def find_pc_line(pc: int | Value) -> Symtab_and_line: ...
 def post_event(event: Callable[[], object], /) -> None: ...
 def write(string: str, stream: int = ...) -> None: ...
@@ -74,8 +75,9 @@ class GdbError(Exception): ...
 _ValueOrNative: TypeAlias = bool | int | float | str | Value | LazyString
 _ValueOrInt: TypeAlias = Value | int
 
+@disjoint_base
 class Value:
-    address: Value
+    address: Value | None
     is_optimized_out: bool
     type: Type
     dynamic_type: Type
@@ -85,31 +87,36 @@ class Value:
     def __index__(self) -> int: ...
     def __int__(self) -> int: ...
     def __float__(self) -> float: ...
-    def __add__(self, other: _ValueOrNative) -> Value: ...
-    def __radd__(self, other: _ValueOrNative) -> Value: ...
-    def __sub__(self, other: _ValueOrNative) -> Value: ...
-    def __rsub__(self, other: _ValueOrNative) -> Value: ...
-    def __mul__(self, other: _ValueOrNative) -> Value: ...
-    def __rmul__(self, other: _ValueOrNative) -> Value: ...
-    def __truediv__(self, other: _ValueOrNative) -> Value: ...
-    def __rtruediv__(self, other: _ValueOrNative) -> Value: ...
-    def __mod__(self, other: _ValueOrNative) -> Value: ...
-    def __rmod__(self, other: _ValueOrNative) -> Value: ...
-    def __pow__(self, other: _ValueOrNative, mod: None = None) -> Value: ...
-    def __and__(self, other: _ValueOrNative) -> Value: ...
-    def __or__(self, other: _ValueOrNative) -> Value: ...
-    def __xor__(self, other: _ValueOrNative) -> Value: ...
-    def __lshift__(self, other: _ValueOrNative) -> Value: ...
-    def __rshift__(self, other: _ValueOrNative) -> Value: ...
-    def __eq__(self, other: _ValueOrNative) -> bool: ...  # type: ignore[override]
-    def __ne__(self, other: _ValueOrNative) -> bool: ...  # type: ignore[override]
-    def __lt__(self, other: _ValueOrNative) -> bool: ...
-    def __le__(self, other: _ValueOrNative) -> bool: ...
-    def __gt__(self, other: _ValueOrNative) -> bool: ...
-    def __ge__(self, other: _ValueOrNative) -> bool: ...
-    def __getitem__(self, key: int | str | Field) -> Value: ...
+    def __add__(self, other: _ValueOrNative, /) -> Value: ...
+    def __radd__(self, other: _ValueOrNative, /) -> Value: ...
+    def __sub__(self, other: _ValueOrNative, /) -> Value: ...
+    def __rsub__(self, other: _ValueOrNative, /) -> Value: ...
+    def __mul__(self, other: _ValueOrNative, /) -> Value: ...
+    def __rmul__(self, other: _ValueOrNative, /) -> Value: ...
+    def __truediv__(self, other: _ValueOrNative, /) -> Value: ...
+    def __rtruediv__(self, other: _ValueOrNative, /) -> Value: ...
+    def __mod__(self, other: _ValueOrNative, /) -> Value: ...
+    def __rmod__(self, other: _ValueOrNative, /) -> Value: ...
+    def __pow__(self, other: _ValueOrNative, mod: None = None, /) -> Value: ...
+    def __and__(self, other: _ValueOrNative, /) -> Value: ...
+    def __or__(self, other: _ValueOrNative, /) -> Value: ...
+    def __xor__(self, other: _ValueOrNative, /) -> Value: ...
+    def __lshift__(self, other: _ValueOrNative, /) -> Value: ...
+    def __rshift__(self, other: _ValueOrNative, /) -> Value: ...
+    def __eq__(self, other: _ValueOrNative, /) -> bool: ...  # type: ignore[override]
+    def __ne__(self, other: _ValueOrNative, /) -> bool: ...  # type: ignore[override]
+    def __lt__(self, other: _ValueOrNative, /) -> bool: ...
+    def __le__(self, other: _ValueOrNative, /) -> bool: ...
+    def __gt__(self, other: _ValueOrNative, /) -> bool: ...
+    def __ge__(self, other: _ValueOrNative, /) -> bool: ...
+    def __getitem__(self, key: int | str | Field, /) -> Value: ...
     def __call__(self, *args: _ValueOrNative) -> Value: ...
-    def __init__(self, val: _ValueOrNative) -> None: ...
+
+    @overload
+    def __init__(self, val: _ValueOrNative, type: None = None) -> None: ...
+    @overload
+    def __init__(self, val: _BufferType, type: Type) -> None: ...
+
     def cast(self, type: Type) -> Value: ...
     def dereference(self) -> Value: ...
     def referenced_value(self) -> Value: ...
@@ -127,9 +134,12 @@ class Value:
         symbols: bool = ...,
         unions: bool = ...,
         address: bool = ...,
+        styling: bool = ...,
+        nibbles: bool = ...,
         deref_refs: bool = ...,
         actual_objects: bool = ...,
         static_members: bool = ...,
+        max_characters: int = ...,
         max_elements: int = ...,
         max_depth: int = ...,
         repeat_threshold: int = ...,
@@ -144,6 +154,7 @@ class Value:
 # Types
 
 def lookup_type(name: str, block: Block = ...) -> Type: ...
+
 @final
 class Type(Mapping[str, Field]):
     alignof: int
@@ -177,7 +188,7 @@ class Type(Mapping[str, Field]):
     def get(self, key: str, default: Any = ...) -> Field | Any: ...
     def has_key(self, key: str) -> bool: ...
     def __len__(self) -> int: ...
-    def __getitem__(self, key: str) -> Field: ...
+    def __getitem__(self, key: str, /) -> Field: ...
     def __iter__(self) -> TypeIterator[str]: ...
 
 _T = TypeVar("_T")
@@ -240,6 +251,7 @@ SEARCH_FUNCTION_DOMAIN: Final[int]
 
 # Pretty Printing
 
+@type_check_only
 class _PrettyPrinter(Protocol):
     # TODO: The "children" and "display_hint" methods are optional for
     # pretty-printers. Unfortunately, there is no such thing as an optional
@@ -260,12 +272,15 @@ type_printers: list[gdb.types._TypePrinter]
 
 # Filtering Frames
 
+@type_check_only
 class _FrameFilter(Protocol):
     name: str
     enabled: bool
     priority: int
 
-    def filter(self, iterator: Iterator[gdb.FrameDecorator.FrameDecorator]) -> Iterator[gdb.FrameDecorator.FrameDecorator]: ...
+    def filter(
+        self, iterator: Iterator[gdb.FrameDecorator.FrameDecorator | gdb.FrameDecorator.DAPFrameDecorator]
+    ) -> Iterator[gdb.FrameDecorator.FrameDecorator | gdb.FrameDecorator.DAPFrameDecorator]: ...
 
 frame_filters: dict[str, _FrameFilter]
 
@@ -273,7 +288,7 @@ frame_filters: dict[str, _FrameFilter]
 
 @final
 class PendingFrame:
-    def read_register(self, reg: str | RegisterDescriptor | int, /) -> Value: ...
+    def read_register(self, register: str | RegisterDescriptor | int) -> Value: ...
     def create_unwind_info(self, frame_id: object, /) -> UnwindInfo: ...
     def architecture(self) -> Architecture: ...
     def language(self): ...
@@ -287,9 +302,17 @@ class PendingFrame:
 
 @final
 class UnwindInfo:
-    def add_saved_register(self, reg: str | RegisterDescriptor | int, value: Value, /) -> None: ...
+    def add_saved_register(self, register: str | RegisterDescriptor | int, value: Value) -> None: ...
 
-frame_unwinders: list[gdb.unwinder.Unwinder]
+@type_check_only
+class _Unwinder(Protocol):
+    @property
+    def name(self) -> str: ...
+    enabled: bool
+
+    def __call__(self, pending_frame: PendingFrame) -> UnwindInfo | None: ...
+
+frame_unwinders: list[_Unwinder]
 
 # Inferiors
 
@@ -306,14 +329,18 @@ class Inferior:
     pid: int
     was_attached: bool
     progspace: Progspace
-    main_name: Incomplete
-    arguments: Incomplete
+    main_name: str | None
+
+    @property
+    def arguments(self) -> str | None: ...
+    @arguments.setter
+    def arguments(self, args: str | Sequence[str]) -> None: ...
 
     def is_valid(self) -> bool: ...
     def threads(self) -> tuple[InferiorThread, ...]: ...
     def architecture(self) -> Architecture: ...
     def read_memory(self, address: _ValueOrInt, length: int) -> memoryview: ...
-    def write_memory(self, address: _ValueOrInt, buffer: _BufferType, length: int = ...) -> memoryview: ...
+    def write_memory(self, address: _ValueOrInt, buffer: _BufferType, length: int = ...) -> None: ...
     def search_memory(self, address: _ValueOrInt, length: int, pattern: _BufferType) -> int | None: ...
     def thread_from_handle(self, handle: Value) -> InferiorThread: ...
     @deprecated("Use gdb.thread_from_handle() instead.")
@@ -327,6 +354,7 @@ class Inferior:
 class Thread(threading.Thread): ...
 
 def selected_thread() -> InferiorThread: ...
+
 @final
 class InferiorThread:
     name: str | None
@@ -360,6 +388,7 @@ class Record:
     function_call_history: list[RecordFunctionSegment]
 
     def goto(self, instruction: Instruction, /) -> None: ...
+    def clear(self) -> None: ...
 
 class Instruction:
     pc: int
@@ -388,6 +417,7 @@ class RecordFunctionSegment:
 
 # CLI Commands
 
+@disjoint_base
 class Command:
     def __init__(self, name: str, command_class: int, completer_class: int = ..., prefix: bool = ...) -> None: ...
     def dont_repeat(self) -> None: ...
@@ -419,6 +449,7 @@ COMPLETE_EXPRESSION: int
 
 # GDB/MI Commands
 
+@disjoint_base
 class MICommand:
     name: str
     installed: bool
@@ -428,6 +459,7 @@ class MICommand:
 
 # Parameters
 
+@disjoint_base
 class Parameter:
     set_doc: str
     show_doc: str
@@ -460,6 +492,7 @@ class Function:
 
 def current_progspace() -> Progspace | None: ...
 def progspaces() -> Sequence[Progspace]: ...
+
 @final
 class Progspace:
     executable_filename: str | None
@@ -468,8 +501,8 @@ class Progspace:
     pretty_printers: list[_PrettyPrinterLookupFunction]
     type_printers: list[gdb.types._TypePrinter]
     frame_filters: dict[str, _FrameFilter]
-    frame_unwinders: list[gdb.unwinder.Unwinder]
-    missing_debug_handlers: Incomplete
+    frame_unwinders: list[_Unwinder]
+    missing_file_handlers: Sequence[tuple[Literal["debug"], MissingDebugHandler] | tuple[Literal["file"], MissingFileHandler]]
 
     def block_for_pc(self, pc: int, /) -> Block | None: ...
     def find_pc_line(self, pc: int, /) -> Symtab_and_line: ...
@@ -483,6 +516,7 @@ class Progspace:
 def current_objfile() -> Objfile | None: ...
 def objfiles() -> list[Objfile]: ...
 def lookup_objfile(name: str, by_build_id: bool = ...) -> Objfile | None: ...
+
 @final
 class Objfile:
     filename: str | None
@@ -493,7 +527,7 @@ class Objfile:
     pretty_printers: list[_PrettyPrinterLookupFunction]
     type_printers: list[gdb.types._TypePrinter]
     frame_filters: dict[str, _FrameFilter]
-    frame_unwinders: list[gdb.unwinder.Unwinder]
+    frame_unwinders: list[_Unwinder]
     is_file: bool
 
     def is_valid(self) -> bool: ...
@@ -532,22 +566,23 @@ class Frame:
     def architecture(self) -> Architecture: ...
     def type(self) -> int: ...
     def unwind_stop_reason(self) -> int: ...
-    def pc(self) -> Value: ...
+    def pc(self) -> int: ...
     def block(self) -> Block: ...
     def function(self) -> Symbol: ...
     def older(self) -> Frame | None: ...
     def newer(self) -> Frame | None: ...
     def find_sal(self) -> Symtab_and_line: ...
-    def read_register(self, register: str | RegisterDescriptor | int, /) -> Value: ...
-    def read_var(self, variable: str | Symbol, /, block: Block | None = ...) -> Value: ...
+    def read_register(self, register: str | RegisterDescriptor | int) -> Value: ...
+    def read_var(self, variable: str | Symbol, block: Block | None = ...) -> Value: ...
     def select(self) -> None: ...
     def level(self) -> int: ...
-    def static_link(self) -> Incomplete | None: ...
+    def static_link(self) -> Frame | None: ...
     def language(self): ...
 
 # Blocks
 
 def block_for_pc(pc: int) -> Block | None: ...
+
 @final
 class Block:
     start: int
@@ -574,6 +609,7 @@ def lookup_symbol(name: str, block: Block | None = ..., domain: int = ...) -> tu
 def lookup_global_symbol(name: str, domain: int = ...) -> Symbol | None: ...
 def lookup_static_symbol(name: str, domain: int = ...) -> Symbol | None: ...
 def lookup_static_symbols(name: str, domain: int = ...) -> list[Symbol]: ...
+
 @final
 class Symbol:
     type: Type | None
@@ -588,6 +624,7 @@ class Symbol:
     is_constant: bool
     is_function: bool
     is_variable: bool
+    is_artificial: bool
 
     def is_valid(self) -> bool: ...
     def value(self, frame: Frame = ..., /) -> Value: ...
@@ -663,22 +700,132 @@ class LineTable:
 
 # Breakpoints
 
+@disjoint_base
 class Breakpoint:
-    @overload
-    def __init__(
-        self, spec: str, type: int = ..., wp_class: int = ..., internal: bool = ..., temporary: bool = ..., qualified: bool = ...
-    ) -> None: ...
+    # The where="spec" form of __init__().  See py-breakpoints.c:bppy_init():keywords for the positional order.
     @overload
     def __init__(
         self,
-        source: str = ...,
-        function: str = ...,
-        label: str = ...,
-        line: int = ...,
+        # where
+        spec: str = ...,
+        # options
+        type: int = ...,
+        wp_class: int = ...,
         internal: bool = ...,
         temporary: bool = ...,
         qualified: bool = ...,
     ) -> None: ...
+
+    # The where="location" form of __init__().  A watchpoint (`type=BP_WATCHPOINT`) cannot be created with this form.
+    #
+    # We exclude the `wp_class` (watchpoint class) option here, even though py-breakpoints.c accepts it.  It doesn't make sense
+    # unless type==BP_WATCHPOINT, and is silently ignored in those cases; allowing it in those cases is likely an oversight, not
+    # an intentional allowance.
+    #
+    # We repeat this 7 times because the type system doesn't have simple a way for us to say "at least one of `function`, `label`,
+    # or `line`", so we must repeat it for each combination of the 3.
+    #
+    # The len=3 combination.
+    @overload
+    def __init__(
+        self,
+        *,
+        # where
+        source: str = ...,
+        function: str,
+        label: str,
+        line: int | str,
+        # options
+        type: int = ...,
+        internal: bool = ...,
+        temporary: bool = ...,
+        qualified: bool = ...,
+    ) -> None: ...
+    # The 3 len=2 combinations.
+    @overload
+    def __init__(
+        self,
+        *,
+        source: str = ...,
+        # where
+        label: str,
+        line: int | str,
+        # options
+        type: int = ...,
+        internal: bool = ...,
+        temporary: bool = ...,
+        qualified: bool = ...,
+    ) -> None: ...
+    @overload
+    def __init__(
+        self,
+        *,
+        source: str = ...,
+        # where
+        function: str,
+        line: int | str,
+        # options
+        type: int = ...,
+        internal: bool = ...,
+        temporary: bool = ...,
+        qualified: bool = ...,
+    ) -> None: ...
+    @overload
+    def __init__(
+        self,
+        *,
+        source: str = ...,
+        # where
+        function: str,
+        label: str,
+        # options
+        type: int = ...,
+        internal: bool = ...,
+        temporary: bool = ...,
+        qualified: bool = ...,
+    ) -> None: ...
+    # The 3 len=1 combinations.
+    @overload
+    def __init__(
+        self,
+        *,
+        source: str = ...,
+        # where
+        function: str,
+        # options
+        type: int = ...,
+        internal: bool = ...,
+        temporary: bool = ...,
+        qualified: bool = ...,
+    ) -> None: ...
+    @overload
+    def __init__(
+        self,
+        *,
+        source: str = ...,
+        # where
+        label: str,
+        # options
+        type: int = ...,
+        internal: bool = ...,
+        temporary: bool = ...,
+        qualified: bool = ...,
+    ) -> None: ...
+    @overload
+    def __init__(
+        self,
+        *,
+        source: str = ...,
+        # where
+        line: int | str,
+        # options
+        type: int = ...,
+        internal: bool = ...,
+        temporary: bool = ...,
+        qualified: bool = ...,
+    ) -> None: ...
+
+    # Methods.
     def stop(self) -> bool: ...
     def is_valid(self) -> bool: ...
     def delete(self) -> None: ...
@@ -695,7 +842,7 @@ class Breakpoint:
     temporary: bool
     hit_count: int
     location: str | None
-    locations: Incomplete
+    locations: Sequence[BreakpointLocation]
     inferior: int | None
     expression: str | None
     condition: str | None
@@ -703,13 +850,13 @@ class Breakpoint:
 
 @final
 class BreakpointLocation:
-    address: Incomplete
+    address: int
     enabled: bool
     fullname: str
-    function: Incomplete
-    owner: Incomplete
-    source: Incomplete
-    thread_groups: Incomplete
+    function: str | None
+    owner: Breakpoint
+    source: tuple[str, int]
+    thread_groups: Sequence[int]
 
 BP_NONE: int
 BP_BREAKPOINT: int
@@ -726,6 +873,7 @@ WP_ACCESS: int
 
 # Finish Breakpoints
 
+@disjoint_base
 class FinishBreakpoint(Breakpoint):
     return_value: Value | None
 
@@ -744,10 +892,16 @@ class LazyString:
 
 # Architectures
 
+@type_check_only
+class _Instruction(TypedDict):
+    addr: int
+    asm: str
+    length: int
+
 @final
 class Architecture:
     def name(self) -> str: ...
-    def disassemble(self, start_pc: int, end_pc: int = ..., count: int = ...) -> list[dict[str, object]]: ...
+    def disassemble(self, start_pc: int, end_pc: int = ..., count: int = ...) -> list[_Instruction]: ...
     def integer_type(self, size: int, signed: bool = ...) -> Type: ...
     def registers(self, reggroup: str = ...) -> RegisterDescriptorIterator: ...
     def register_groups(self) -> RegisterGroupsIterator: ...
@@ -773,6 +927,7 @@ class RegisterGroupsIterator(Iterator[RegisterGroup]):
 
 # Connections
 
+@disjoint_base
 class TargetConnection:
     def is_valid(self) -> bool: ...
 
@@ -796,8 +951,9 @@ class TuiWindow:
 
     def is_valid(self) -> bool: ...
     def erase(self) -> None: ...
-    def write(self, string: str, full_window: bool = ..., /) -> None: ...
+    def write(self, string: str, full_window: bool = ...) -> None: ...
 
+@type_check_only
 class _Window(Protocol):
     def close(self) -> None: ...
     def render(self) -> None: ...
@@ -806,6 +962,7 @@ class _Window(Protocol):
     def click(self, x: int, y: int, button: int) -> None: ...
 
 # Events
+@disjoint_base
 class Event: ...
 
 class ThreadEvent(Event):
@@ -817,19 +974,20 @@ class ExitedEvent(Event):
     exit_code: int
     inferior: Inferior
 
-class ThreadExitedEvent(Event): ...
-class StopEvent(ThreadEvent): ...
+class ThreadExitedEvent(ThreadEvent): ...
+
+class StopEvent(ThreadEvent):
+    details: dict[str, object]
 
 class BreakpointEvent(StopEvent):
     breakpoints: Sequence[Breakpoint]
     breakpoint: Breakpoint
 
-missing_debug_handlers: list[Incomplete]
-
 class NewObjFileEvent(Event):
     new_objfile: Objfile
 
-class FreeObjFileEvent(Event): ...
+class FreeObjFileEvent(Event):
+    objfile: Objfile
 
 class ClearObjFilesEvent(Event):
     progspace: Progspace
@@ -840,6 +998,7 @@ class FreeProgspaceEvent(Event): ...
 class SignalEvent(StopEvent):
     stop_signal: str
 
+@type_check_only
 class _InferiorCallEvent(Event): ...
 
 class InferiorCallPreEvent(_InferiorCallEvent):
@@ -874,6 +1033,9 @@ class ConnectionEvent(Event):
 
 class ExecutableChangedEvent(Event): ...
 
+class TuiEnabledEvent(Event):
+    enabled: bool
+
 _ET = TypeVar("_ET", bound=Event | Breakpoint | None)
 
 @final
@@ -884,3 +1046,6 @@ class EventRegistry(Generic[_ET]):
 class ValuePrinter: ...
 
 def blocked_signals(): ...
+def notify_mi(name: str, data: dict[str, object] | None = None): ...
+def interrupt(): ...
+def execute_mi(command: str, *args: str) -> dict[str, object]: ...
