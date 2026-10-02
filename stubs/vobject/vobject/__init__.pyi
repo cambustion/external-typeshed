@@ -1,8 +1,5 @@
-from typing import Final
-
-from .base import Component
+from . import icalendar as icalendar, vcard as vcard
+from .base import VERSION as VERSION, Component, readComponents as readComponents, readOne as readOne
 
 def iCalendar() -> Component: ...
 def vCard() -> Component: ...
-
-VERSION: Final[str]

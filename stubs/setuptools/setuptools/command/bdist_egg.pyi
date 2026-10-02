@@ -1,15 +1,16 @@
 from _typeshed import GenericPath, Incomplete, StrPath
 from collections.abc import Iterator
 from types import CodeType
-from typing import AnyStr, ClassVar, Final, TypeVar
+from typing import ClassVar, Final, Literal, TypeVar
 from zipfile import _ZipFileMode
 
 from .. import Command
 
 _StrPathT = TypeVar("_StrPathT", bound=StrPath)
+_StrOrBytesT = TypeVar("_StrOrBytesT", str, bytes)
 
 def strip_module(filename): ...
-def sorted_walk(dir: GenericPath[AnyStr]) -> Iterator[tuple[AnyStr, list[AnyStr], list[AnyStr]]]: ...
+def sorted_walk(dir: GenericPath[_StrOrBytesT]) -> Iterator[tuple[_StrOrBytesT, list[_StrOrBytesT], list[_StrOrBytesT]]]: ...
 def write_stub(resource, pyfile) -> None: ...
 
 class bdist_egg(Command):
@@ -17,7 +18,7 @@ class bdist_egg(Command):
     user_options: ClassVar[list[tuple[str, str | None, str]]]
     boolean_options: ClassVar[list[str]]
     bdist_dir: Incomplete
-    plat_name: Incomplete
+    plat_name: str
     keep_temp: bool
     dist_dir: Incomplete
     skip_build: bool
@@ -33,7 +34,7 @@ class bdist_egg(Command):
     def run(self) -> None: ...
     def zap_pyfiles(self) -> None: ...
     def zip_safe(self): ...
-    def gen_header(self): ...
+    def gen_header(self) -> Literal["w"]: ...
     def copy_metadata_to(self, target_dir) -> None: ...
     def get_ext_outputs(self): ...
 
@@ -52,10 +53,5 @@ def can_scan() -> bool: ...
 INSTALL_DIRECTORY_ATTRS: Final[list[str]]
 
 def make_zipfile(
-    zip_filename: _StrPathT,
-    base_dir,
-    verbose: bool = False,
-    dry_run: bool = False,
-    compress: bool = True,
-    mode: _ZipFileMode = "w",
+    zip_filename: _StrPathT, base_dir, verbose: bool = False, compress: bool = True, mode: _ZipFileMode = "w"
 ) -> _StrPathT: ...

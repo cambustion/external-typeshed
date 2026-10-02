@@ -1,7 +1,6 @@
-from collections.abc import MutableSequence
+from _typeshed import StrOrBytesPath
+from collections.abc import Sequence
 from subprocess import _ENV
 
-def spawn(
-    cmd: MutableSequence[str], search_path: bool = True, verbose: bool = False, dry_run: bool = False, env: _ENV | None = None
-) -> None: ...
+def spawn(cmd: Sequence[StrOrBytesPath], *, env: _ENV | None = None, **kwargs) -> None: ...
 def find_executable(executable: str, path: str | None = None) -> str | None: ...

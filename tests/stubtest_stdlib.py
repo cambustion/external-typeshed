@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test typeshed's stdlib using stubtest
+"""Test typeshed's stdlib using stubtest.
 
 stubtest is a script in the mypy project that compares stubs to the actual objects at runtime.
 Note that therefore the output of stubtest depends on which Python version it is run with.
@@ -27,14 +27,12 @@ def run_stubtest(typeshed_dir: Path) -> int:
         "-m",
         "mypy.stubtest",
         "--check-typeshed",
+        "--show-traceback",
+        "--strict-type-check-only",
         "--custom-typeshed-dir",
         str(typeshed_dir),
         *allowlist_stubtest_arguments("stdlib"),
     ]
-    if sys.version_info < (3, 10):
-        # As discussed in https://github.com/python/typeshed/issues/3693, we only aim for
-        # positional-only arg accuracy for python 3.10 and above.
-        cmd += ["--ignore-positional-only"]
     print(" ".join(cmd), file=sys.stderr)
     try:
         subprocess.run(cmd, check=True)
